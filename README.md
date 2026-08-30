@@ -2,236 +2,307 @@
 
 # Urban Dance Quality — by Mike G
 
-### Case study & technical showcase of a production dance-school website
+### Technical showcase of a production dance-school platform
 
-**Ιωάννινα, Greece · React + TypeScript + Supabase · deployed on Vercel**
+**React 18 · TypeScript · Supabase (Postgres + RLS) · Vite · Tailwind · Vercel**
 
 [![Live site](https://img.shields.io/badge/live-urbandancequality.gr-FFD60A?style=for-the-badge&labelColor=0B0B0B)](https://www.urbandancequality.gr/)
 &nbsp;
-![Stack](https://img.shields.io/badge/React_18-0B0B0B?style=for-the-badge&logo=react)
+![React](https://img.shields.io/badge/React_18-0B0B0B?style=for-the-badge&logo=react)
 ![TS](https://img.shields.io/badge/TypeScript-0B0B0B?style=for-the-badge&logo=typescript)
-![Vite](https://img.shields.io/badge/Vite-0B0B0B?style=for-the-badge&logo=vite)
 ![Supabase](https://img.shields.io/badge/Supabase-0B0B0B?style=for-the-badge&logo=supabase)
+![Vite](https://img.shields.io/badge/Vite-0B0B0B?style=for-the-badge&logo=vite)
 
-<br/>
-
-<a href="https://www.urbandancequality.gr/">
-  <img src="assets/share-card.jpg" alt="Urban Dance Quality — by Mike G" width="520" />
-</a>
+<a href="https://www.urbandancequality.gr/"><img src="assets/share-card.jpg" width="480" /></a>
 
 </div>
 
 > [!NOTE]
-> **This is a curated showcase, not the source repository.** It exists so anyone can see
-> *how the project was built and the decisions behind it* — architecture, engineering
-> choices, and the real problems solved along the way. **No secrets, credentials, or
-> verbatim application code are published here.** The full source lives in a private repo;
-> the live product is one click away above. 👆
+> **Curated showcase, not the source repo.** It documents *how the platform is engineered* —
+> data flow, the security model, and the interesting bits of code — for anyone reviewing the
+> work. **No credentials and no verbatim application code are published here;** snippets are
+> short, representative excerpts. Full source is private; the live product is linked above.
 
 ---
 
-## 🩰 What it is
+## Overview
 
-A complete, bilingual-ready marketing + operations website for **Urban Dance Quality**, an
-urban dance school in Ioannina founded by **Mike G**. It is not a template — it is a
-custom-built product with two distinct sides:
+A custom marketing **and** operations platform for an urban dance school in Ioannina. Two
+surfaces on one codebase:
 
-- **The public site** — a fast, dark, brand-forward experience: animated hero reel,
-  class catalogue, achievements counters, an events/seminars timeline, a media gallery,
-  an interactive map, and a lead-capture form that turns visitors into trial bookings.
-- **A private admin CMS** — the studio owner logs in and edits everything (classes,
-  coaches, events, achievements, gallery collections) and manages incoming leads, with
-  **zero developer involvement** for day-to-day content.
+- **Public site** — animated hero reel, class catalogue, achievements, events/seminars
+  timeline, media gallery, Leaflet map, and a lead-capture form.
+- **Admin CMS** — a protected dashboard where the owner edits every entity (classes,
+  coaches, events, achievements, gallery) and manages leads. The public site reads the
+  same Postgres records the admin writes.
+
+No custom backend server: the browser talks to Postgres through Supabase, and **the
+database itself** enforces security, integrity, rate-limiting, and even sends email.
 
 <div align="center">
 <br/>
-<img src="assets/cat-breaking.jpg"     width="24%" />
-<img src="assets/cat-kpop.jpg"         width="24%" />
-<img src="assets/cat-competition.jpg"  width="24%" />
-<img src="assets/cat-dancehall.jpg"    width="24%" />
+<img src="assets/cat-breaking.jpg" width="19%" />
+<img src="assets/cat-kpop.jpg" width="19%" />
+<img src="assets/cat-competition.jpg" width="19%" />
+<img src="assets/gallery-parastaseis.jpg" width="19%" />
+<img src="assets/gallery-space.jpg" width="19%" />
 <br/>
-<em>Class categories are video tiles on the live site — Breaking · K-Pop · Competition · Dancehall</em>
+<sub>Live UI — class tiles (Breaking · K-Pop · Competition) and gallery (performances · the space)</sub>
 </div>
 
 ---
 
-## 🧱 Tech stack
+## Tech stack
 
-| Layer | Choice | Why |
+| Layer | Choice | Notes |
 |---|---|---|
-| **UI** | React 18 + TypeScript | Component model + type safety across a large surface |
-| **Build** | Vite 5 | Instant HMR, tiny config, fast production builds |
-| **Styling** | Tailwind CSS 3 (semantic design tokens) | Utility speed *without* hard-coded colors — see below |
-| **Motion** | Framer Motion | Hero reel, scroll reveals, marquee strips |
-| **Routing** | React Router 6 (lazy admin bundle) | Public and admin code split apart |
-| **Backend** | Supabase (Postgres + Auth + Storage) | DB, row-level security, auth and media in one |
-| **Email** | Resend, triggered from Postgres | Transactional lead emails without a server |
-| **Maps** | Leaflet + React-Leaflet | Lightweight, no API-key vendor lock-in |
-| **Hosting** | Vercel | Git-push deploys, global edge, automatic HTTPS |
+| UI | React 18 + TypeScript | Strict types across a large component surface |
+| Build | Vite 5 | `tsc -b && vite build`; admin code-split out |
+| Styling | Tailwind 3 + semantic CSS-variable tokens | Roles, not hexes |
+| Motion | Framer Motion | One shared preset vocabulary |
+| Routing | React Router 6 | Lazy-loaded admin bundle |
+| Data | Supabase — Postgres, Auth, Storage | RLS is the real authorization layer |
+| Email | Resend, called from a Postgres trigger | Transactional, serverless |
+| Maps | Leaflet + React-Leaflet | No API-key vendor lock-in |
+| Hosting | Vercel | Git-push deploys, edge, auto HTTPS |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
-The frontend is layered so that **UI never talks to the database directly**. Every data
-path flows through a thin service, is wrapped by a hook, and is shared through context.
-That separation is what makes the admin CMS and the public site reuse the same data
-safely.
+UI never touches the database directly. Every read/write goes **component → hook → service
+→ Supabase**, and the database is the final authority on what's allowed.
 
 ```mermaid
-flowchart TD
-    subgraph Client["React app (Vite)"]
-        UI["Components<br/>Hero · Gallery · Events · Admin panels"]
-        Hooks["Hooks<br/>useLeads · useEvents · useGallery · useClasses"]
-        Ctx["Context providers<br/>Auth · Content · Theme"]
-        Svc["Services<br/>leadService · eventService · galleryService · authService"]
-        UI --> Hooks --> Ctx
-        Hooks --> Svc
-    end
-    Svc -->|typed queries| SB[(Supabase<br/>Postgres · Auth · Storage)]
-    SB -->|row inserted: new lead| TRG{{DB trigger}}
-    TRG -->|edge function| RS[Resend API]
-    RS -->|"welcome email → lead<br/>notification → studio"| MAIL((📧))
-    Client -->|git push| VC[Vercel edge]
+flowchart LR
+    UI["Components"] --> H["Hooks<br/>useEvents · useSubmitLead · useGallery"]
+    H --> Svc["Services<br/>eventService · leadService · authService"]
+    Svc -->|"typed queries"| DB[("Supabase Postgres")]
+    DB -.->|"RLS policies"| DB
+    DB -->|"BEFORE INSERT"| RL{{"rate-limit trigger"}}
+    DB -->|"AFTER INSERT on leads"| RS{{"notify_resend()"}}
+    RS -->|"net.http_post"| Resend["Resend API → 📧"]
 ```
-
-**Folder shape (private repo):**
 
 ```
 src/
-├── components/
-│   ├── frontend/   # Hero, EventsSection, GalleryGrid, RegistrationForm, VideoWall…
-│   ├── admin/      # LeadsPanel, ContentEditor, CollectionManager…
-│   ├── layout/     # Navbar, Footer, MenuOverlay, Layout
-│   └── common/     # Button, Modal, Spinner, SectionHead…
-├── services/       # DB access boundary — one file per domain
-├── hooks/          # useLeads, useEvents, useGallery, useSubmitLead…
-├── context/        # Auth / Content / Theme providers
-├── config/         # theme tokens, gallery manifest, constants
-├── utils/          # validators, honeypot, formatters
-├── pages/          # public pages + admin/ (lazy-loaded)
-└── routes/         # AppRouter, ProtectedRoute, ScrollToTop
+├── components/ frontend/  admin/  layout/  common/
+├── services/   # DB access boundary — one module per domain, row⇄model mapping
+├── hooks/      # data + derived state (useEvents, useSubmitLead, useGallery…)
+├── context/    # Auth / Content / Theme providers
+├── config/     # design tokens, gallery manifest, seed data
+├── utils/      # validators, honeypot, formatters
+├── pages/      # public pages + admin/ (lazy)
+└── routes/     # AppRouter, ProtectedRoute, ScrollToTop
+supabase/       # schema.sql (RLS + triggers), resend.sql, migrations
 ```
 
 ---
 
-## ✨ Feature highlights
+## Code highlights
 
-- **Owner-editable CMS** — classes, coaches, events, achievements and gallery collections
-  are all edited from a protected dashboard; the marketing site reads the same records.
-- **Lead capture → automatic email** — a trial-booking form writes a lead to Postgres; a
-  database trigger fires a Resend email (welcome to the lead, notification to the studio)
-  with **no backend server to run or pay for**.
-- **Anti-spam by design** — a hidden honeypot field plus client-side validation stop bots
-  before a row is ever written.
-- **7-category media gallery** — performances, seminars, competitions, talent, the space,
-  video classes and video projects, each with its own compressed media set.
-- **SEO & social ready** — canonical host, Open Graph + Twitter cards, `DanceSchool`
-  structured data (schema.org), sitemap and geo meta for local search in Ioannina.
-- **Mobile-first, motion-rich, accessible** — reduced-motion support, visible focus rings,
-  no horizontal scroll, and a hard-locked dark brand theme (story below).
+### 1 · One DB client, graceful degradation
+A single Supabase client for the whole app. If env vars are absent (previews, CI), services
+fall back to seed data instead of crashing the build.
 
-<div align="center">
-<br/>
-<img src="assets/gallery-parastaseis.jpg" width="32%" />
-<img src="assets/gallery-space.jpg"       width="32%" />
-<img src="assets/gallery-seminars.jpg"    width="32%" />
-<br/>
-<em>From the live gallery — performances · the studio space · seminars</em>
-</div>
+```ts
+// lib/supabaseClient.ts
+export const isSupabaseConfigured =
+  Boolean(import.meta.env.VITE_SUPABASE_URL) && Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
----
-
-## 🔧 Engineering decisions & problems solved
-
-This is the *"how I moved"* part — real calls made during the build, and a few bugs that
-were genuinely interesting to chase down.
-
-### 1. Semantic color tokens instead of hard-coded colors
-Every color is a CSS variable exposed to Tailwind as a role (`bg`, `surf`, `ink`, `yel`…),
-not a literal. Components ask for a **role**, never a hex. Swapping the entire palette is a
-matter of changing variables in one place — no component knows or cares.
-
-```css
-:root {
-  --c-bg:  11 11 11;   --c-ink: 245 245 243;
-  --c-surf: 20 20 20;  --c-yel: 255 214 10;   /* the brand gold */
+export const supabase = createClient(url, anonKey, {
+  auth: { persistSession: true, autoRefreshToken: true },
+});
+```
+```ts
+// services/eventService.ts — the fallback in action
+async getAll(): Promise<DanceEvent[]> {
+  if (!isSupabaseConfigured) return SEED_EVENTS;
+  const { data, error } = await supabase.from("events")
+    .select("*").order("starts_at", { ascending: false });
+  if (error) throw error;
+  const rows = (data ?? []).map(fromRow);
+  return rows.length ? rows : SEED_EVENTS;
 }
-/* tailwind.config → colors: { yel: "rgb(var(--c-yel) / <alpha-value>)" } */
-/* usage → class="bg-bg text-ink border-yel/40"  */
 ```
 
-### 2. The "why is it brown on their phones?" bug 🕵️
-The site is designed **dark-only** (black + gold). The theme originally followed the
-device's `prefers-color-scheme`. On the developer's devices (always dark mode) it looked
-perfect — gold on black. But on a visitor's phone in **light mode**, the never-finished
-light palette kicked in: dark text on the dark fixed background photo blended into a muddy
-**brown**. Because the choice was cached per-device in `localStorage`, it showed up
-intermittently and looked like it "changed on its own."
+### 2 · Services own the DB⇄model boundary
+Postgres speaks `snake_case`; the app speaks `camelCase`. Two pure mappers per domain keep
+that translation in exactly one place, so components only ever see clean typed models.
 
-**Fix:** since there's no theme switch in the UI, the site is now **locked to dark** for
-everyone — ignoring both the OS setting and any stale cached value — so every visitor sees
-the same intended black-and-gold.
+```ts
+// services/eventService.ts
+function fromRow(r: any): DanceEvent {
+  return { id: r.id, title: r.title, startsAt: r.starts_at,
+           coverUrl: r.cover_url, resultNote: r.result_note,
+           published: r.published ?? true /* … */ };
+}
+function toRow(e: Partial<DanceEvent>): any {
+  const row: any = {};
+  if (e.startsAt !== undefined) row.starts_at = e.startsAt;   // only touch provided keys
+  if (e.coverUrl !== undefined) row.cover_url = e.coverUrl;   // → partial updates stay partial
+  /* … */ return row;
+}
+```
+
+### 3 · Hooks hold the data logic, not the UI
+Deriving "upcoming vs past", or splitting seminars from competition results, is *data*
+logic — so it lives in the hook and is memoized. Components just render the arrays.
+
+```ts
+// hooks/useEvents.ts
+const seminars = useMemo(() => visible.filter((e) => !e.resultNote), [visible]);
+const upcoming = useMemo(
+  () => seminars.filter((e) => isUpcoming(e.startsAt))
+                .sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt)),
+  [seminars]
+);
+// cleanup-guarded fetch so a unmounted component never setStates
+useEffect(() => { let alive = true;
+  eventService.getAll().then((r) => alive && setAll(r)) /* … */;
+  return () => { alive = false; };
+}, [version]);
+```
+
+### 4 · Security lives in the database (RLS), not the router
+The route guard is **UX only**. Real authorization is Row-Level Security: an anonymous
+visitor may *insert* a lead and nothing else — never read anyone's data.
+
+```sql
+-- supabase/schema.sql
+alter table public.leads enable row level security;
+
+-- anonymous: write-only
+create policy leads_anon_insert on public.leads for insert to anon with check (true);
+-- authenticated admin: full access
+create policy leads_admin_all  on public.leads for all    to authenticated using (true) with check (true);
+
+revoke all on public.leads from anon;
+grant insert on public.leads to anon;   -- literally only INSERT
+```
+```tsx
+// routes/ProtectedRoute.tsx — a convenience redirect, not the security boundary
+if (!user) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+```
+
+### 5 · Integrity + rate-limiting enforced server-side
+`CHECK` constraints make bad rows impossible, and a `BEFORE INSERT` trigger throttles
+submissions — neither can be bypassed from the browser.
+
+```sql
+-- constraints on the leads table
+constraint leads_phone_len   check (char_length(phone) between 6 and 20),
+constraint leads_message_len check (char_length(message) <= 1000)
+```
+```sql
+-- BEFORE INSERT throttle (security definer, since anon has no SELECT)
+select count(*) into per_phone from public.leads
+  where phone = new.phone and created_at > now() - interval '1 minute';
+if per_phone >= 3 then
+  raise exception 'RATE_LIMIT: too many requests from this number.';
+end if;
+```
+
+### 6 · Transactional email straight from Postgres
+An `AFTER INSERT` trigger on `leads` calls Resend over HTTP from inside the database — a
+welcome email to the lead, a notification to the studio. Zero app-server code.
+
+```sql
+-- supabase/resend.sql  (API key injected server-side, never committed)
+create or replace function public.notify_resend() returns trigger as $$
+declare resend_key text := '<RESEND_API_KEY>';
+begin
+  perform net.http_post(
+    url     := 'https://api.resend.com/emails',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || resend_key,
+                                  'Content-Type', 'application/json'),
+    body    := jsonb_build_object('from', from_email, 'to', new.email,
+                                  'subject', 'Καλωσήρθες στην UDQ', 'html', welcome_html)
+  );
+  return new;
+end $$ language plpgsql;
+
+create trigger leads_notify_resend after insert on public.leads
+for each row execute function public.notify_resend();
+```
+
+### 7 · Anti-spam before a request even leaves the page
+A hidden honeypot field plus a minimum fill-time reject obvious bots client-side, layered
+*on top of* the server rate-limit.
+
+```ts
+// utils/honeypot.ts
+export function isLikelyBot(honeypotValue: string, mountedAt: number): boolean {
+  if (honeypotValue.trim() !== "") return true;            // bot filled the hidden field
+  if (Date.now() - mountedAt < 3000) return true;          // submitted in < 3s
+  return false;
+}
+```
+```ts
+// hooks/useSubmitLead.ts — validate → insert → typed status, all in one hook
+const found = validateLead(draft);
+if (hasErrors(found)) { setErrors(found); return false; }
+try { await leadService.create(draft); setStatus("sent"); }
+catch (e) { /* surfaces the DB RATE_LIMIT message to the user */ }
+```
+
+### 8 · Admin never ships to visitors
+The CMS bundle is lazy-loaded and gated behind `Suspense`, so a public visitor downloads
+zero admin code.
 
 ```tsx
-// The whole product is dark by design; lock it and ignore the device.
-const theme = "dark";
-useEffect(() => {
-  document.documentElement.setAttribute("data-theme", "dark");
-  localStorage.setItem("udq-theme", "dark");
-}, []);
+// routes/AppRouter.tsx
+const DashboardPage = lazy(() => import("../pages/admin/DashboardPage"));
+<Route path="/admin" element={
+  <ProtectedRoute>
+    <Suspense fallback={AdminFallback}><DashboardPage /></Suspense>
+  </ProtectedRoute>
+}/>
 ```
-> Lesson: an unfinished "second theme" wired to a system preference is a landmine —
-> it stays invisible until the first visitor whose device flips the switch.
 
-### 3. Zoom vs. smooth scrolling
-Desktop renders at `zoom: 0.75` for density, but that global zoom **breaks JS smooth
-scrolling** (target offsets get miscomputed). Anchor navigation was switched to instant,
-synchronous scrolling so it lands on the right section every time.
+### 9 · Design as tokens, motion as a vocabulary
+Colors are semantic CSS variables surfaced to Tailwind as roles; Framer presets give the
+whole site one consistent motion language.
 
-### 4. Mobile renders at 100%, desktop at 75%
-The `zoom` trick that tightens desktop made **mobile fonts tiny and left a huge hero gap**.
-Zoom is now scoped to `min-width: 768px` only, so phones render at true 100% with correct
-type sizes and viewport units.
-
-### 5. www canonical & the Google "globe" favicon
-Non-www 308-redirects to www on Vercel, but canonical/OG/sitemap all still pointed at the
-non-www host. That mismatch (a canonical URL that redirects elsewhere) broke Google's
-favicon association. Aligning **every** declared URL to the host that actually serves `200`
-fixed it.
-
-### 6. Media pipeline: ship small, keep originals
-Raw photos/videos live outside the app; a compression step produces web-optimized versions
-into per-category folders, and hero videos were compressed to cut **~75 MB** off the
-payload. The gallery reads a manifest so adding media is a content task, not a code change.
+```css
+:root { --c-bg: 11 11 11; --c-ink: 245 245 243; --c-yel: 255 214 10; }
+/* tailwind → colors.yel = "rgb(var(--c-yel) / <alpha-value>)"  →  class="text-yel bg-bg" */
+```
+```ts
+// config/theme.ts
+export const MOTION = {
+  reveal: { initial: { opacity: 0, y: 44 }, whileInView: { opacity: 1, y: 0 },
+            viewport: { once: true, margin: "0px 0px -40px 0px" },
+            transition: { duration: 0.75, ease: [0.76, 0, 0.24, 1] } },
+} as const;
+```
 
 ---
 
-## ⚡ Performance & quality floor
+## Performance & quality floor
 
-- Code-split admin bundle — visitors never download the CMS.
-- Compressed imagery and video; poster frames for every reel.
-- `prefers-reduced-motion` fully honored; keyboard focus always visible.
-- Security headers (HSTS, `X-Content-Type-Options`, `Referrer-Policy`, frame options).
-- Type-checked build (`tsc -b`) gates every deploy.
+- **Code-split admin** — visitors never download the CMS bundle.
+- **Media pipeline** — raw assets kept out of the app; compressed per-category outputs;
+  hero videos trimmed by ~75 MB; poster frames on every reel.
+- **A11y** — `prefers-reduced-motion` honored, always-visible focus rings, no horizontal scroll.
+- **SEO** — canonical host, Open Graph + Twitter cards, `DanceSchool` schema.org, sitemap, geo meta.
+- **Headers** — HSTS, `X-Content-Type-Options`, `Referrer-Policy`, frame options.
+- **Typed gate** — `tsc -b` must pass before any deploy.
 
 ---
 
-## 🚀 How it ships
+## Shipping
 
 ```text
-git push  →  Vercel builds (tsc -b && vite build)  →  global edge deploy  →  https://www.urbandancequality.gr
+git push → Vercel (tsc -b && vite build) → edge deploy → https://www.urbandancequality.gr
 ```
-
-Content changes never touch this pipeline — the owner edits through the admin CMS and the
-public site reflects it immediately from Supabase.
-
----
+Content changes bypass this entirely — the owner edits via the CMS and Postgres serves it live.
 
 <div align="center">
+<br/>
 
-### 👉 See the real thing: **[urbandancequality.gr](https://www.urbandancequality.gr/)**
+### 👉 **[urbandancequality.gr](https://www.urbandancequality.gr/)**
 
-<sub>Built for Urban Dance Quality by Mike G · showcase repository · full source & credentials kept private</sub>
+<sub>Showcase repository · full source & credentials kept private</sub>
 
 </div>
